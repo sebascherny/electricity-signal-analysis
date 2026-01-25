@@ -149,7 +149,7 @@ class ElectricitySignalAnalyzer:
         """
         Construct Vandermonde matrix.
         """
-        V = np.row_stack([nodes**k for k in range(first_power, n_samples + first_power)])
+        V = np.vstack([nodes**k for k in range(first_power, n_samples + first_power)])
         return V
     
     def approximate_sequence(self, signal, n_exponents, verbose=False):
