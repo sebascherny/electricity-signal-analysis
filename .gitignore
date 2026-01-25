@@ -1,0 +1,12 @@
+
+.venv/
+
+
+simulation_outputs/
+
+
+__pycache__/
+*pyc
+
+
+
