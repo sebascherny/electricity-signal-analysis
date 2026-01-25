@@ -2,7 +2,7 @@
 .venv/
 
 
-simulation_outputs/
+simulation_outputs/electricity_analysis*
 
 
 __pycache__/
