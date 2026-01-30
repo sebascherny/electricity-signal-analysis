@@ -309,7 +309,7 @@ class ElectricitySignalAnalyzer:
     def _plot_window_results(self, window_results, microseconds_data, start_idx, end_idx, output_folder=None, window_number=None):
         """
         Plot results for a single window with different n_exponents.
-        Shows window details on the left and complete signal with highlighted window on the right.
+        Shows all approximations in one left plot and complete signal with highlighted window on the right.
         
         :param window_results: Dictionary of results for different n_exponents
         :param microseconds_data: Time data for the complete signal
@@ -322,57 +322,58 @@ class ElectricitySignalAnalyzer:
         if n_plots == 0:
             return
         
-        # Create side-by-side subplots: left for window details, right for complete signal
-        fig, axes = plt.subplots(n_plots, 2, figsize=(20, 4 * n_plots))
-        if n_plots == 1:
-            axes = axes.reshape(1, -1)
+        # Create side-by-side subplots: left for all window approximations, right for complete signal
+        fig, (ax_window, ax_complete) = plt.subplots(1, 2, figsize=(20, 8))
         
         window_microseconds = microseconds_data[start_idx:end_idx]
         complete_signal = self.data[self.column_to_use].values
         complete_microseconds = microseconds_data
         
+        # Define colors for different n_exponents
+        colors = ['red', 'green', 'purple', 'orange', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        
+        # Left subplot: All window approximations in one plot
+        # Plot original window signal first
+        first_result = list(window_results.values())[0]
+        ax_window.plot(window_microseconds, first_result['window_signal'], 'b.-', 
+                      label='Original Signal', linewidth=2, markersize=4)
+        
+        # Plot all approximations with different colors
+        error_info = []
         for idx, (n_exp, result) in enumerate(window_results.items()):
-            # Left subplot: Window details
-            ax_window = axes[idx, 0]
-            
-            # Plot original window signal
-            ax_window.plot(window_microseconds, result['window_signal'], 'b.-', 
-                          label='Original Signal', linewidth=2, markersize=4)
-            
-            # Plot approximation
-            ax_window.plot(window_microseconds, result['approximation'], 'r-', 
-                          label='{} exp'.format(n_exp), linewidth=2)
-            
-            ax_window.set_xlabel('Microseconds')
-            ax_window.set_ylabel(self.column_to_use)
-            ax_window.set_title('Window [{}:{}] - {} Exponents\nL2 Error: {:.6f}'.format(
-                start_idx, end_idx, n_exp, result["error_norma_2"]))
-            ax_window.legend()
-            ax_window.grid(True, alpha=0.3)
-            
-            # Right subplot: Complete signal with highlighted window
-            ax_complete = axes[idx, 1]
-            
-            # Plot complete signal in blue
-            ax_complete.plot(complete_microseconds, complete_signal, 'b-', 
-                           label='Complete Signal', linewidth=1, alpha=0.7)
-            
-            # Highlight the current window in red
-            ax_complete.plot(window_microseconds, result['window_signal'], 'r-', 
-                           label='Current Window', linewidth=2)
-            
-            ax_complete.set_xlabel('Microseconds')
-            ax_complete.set_ylabel(self.column_to_use)
-            ax_complete.set_title('Complete Signal - Window [{}:{}] Highlighted'.format(
-                start_idx, end_idx))
-            ax_complete.legend()
-            ax_complete.grid(True, alpha=0.3)
-            
-            # Add vertical lines to mark window boundaries
-            ax_complete.axvline(x=window_microseconds[0], color='orange', linestyle='--', 
-                              alpha=0.8, label='Window Start')
-            ax_complete.axvline(x=window_microseconds[-1], color='orange', linestyle='--', 
-                              alpha=0.8, label='Window End')
+            color = colors[idx % len(colors)]
+            ax_window.plot(window_microseconds, result['approximation'], color=color, linestyle='-',
+                          label='{} exp (L2: {:.4f})'.format(n_exp, result["error_norma_2"]), linewidth=2)
+            error_info.append('{}exp: {:.6f}'.format(n_exp, result["error_norma_2"]))
+        
+        ax_window.set_xlabel('Microseconds')
+        ax_window.set_ylabel(self.column_to_use)
+        ax_window.set_title('Window [{}:{}] - All Approximations\nL2 Errors: {}'.format(
+            start_idx, end_idx, ', '.join(error_info)))
+        ax_window.legend()
+        ax_window.grid(True, alpha=0.3)
+        
+        # Right subplot: Complete signal with highlighted window (unchanged)
+        # Plot complete signal in blue
+        ax_complete.plot(complete_microseconds, complete_signal, 'b-', 
+                       label='Complete Signal', linewidth=1, alpha=0.7)
+        
+        # Highlight the current window in red
+        ax_complete.plot(window_microseconds, first_result['window_signal'], 'r-', 
+                       label='Current Window', linewidth=2)
+        
+        ax_complete.set_xlabel('Microseconds')
+        ax_complete.set_ylabel(self.column_to_use)
+        ax_complete.set_title('Complete Signal - Window [{}:{}] Highlighted'.format(
+            start_idx, end_idx))
+        ax_complete.legend()
+        ax_complete.grid(True, alpha=0.3)
+        
+        # Add vertical lines to mark window boundaries
+        ax_complete.axvline(x=window_microseconds[0], color='orange', linestyle='--', 
+                          alpha=0.8, label='Window Start')
+        ax_complete.axvline(x=window_microseconds[-1], color='orange', linestyle='--', 
+                          alpha=0.8, label='Window End')
         
         plt.tight_layout()
         
