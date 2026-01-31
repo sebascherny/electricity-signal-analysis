@@ -1,12 +1,17 @@
-
+# virtual environment
 .venv/
 
 
+# output
 simulation_outputs/electricity_analysis*
 
 
+#pyc
 __pycache__/
 *pyc
 
+
+# log
+electricity_signal_analyzer.log
 
 

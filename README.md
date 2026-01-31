@@ -5,6 +5,34 @@ Project to analyze a signal and try to estimate and categorize the relevant chan
 
 A Python class for analyzing electricity signals using exponential approximation methods based on Hankel matrix decomposition.
 
+## Local run
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python example_usage.py
+python test_caching_example.py
+```
+
+## Test in python console
+
+In bash (assuming you created a virtual environment as said above):
+
+```bash
+source .venv/bin/activate
+python
+```
+
+Then in python:
+
+```python
+from electricity_signal_analyzer import ElectricitySignalAnalyzer
+analyzer = ElectricitySignalAnalyzer(".", "128sample_Event.csv", "Report_1_IB")
+analyzer.iterate_through_windows(window_size=200, step_size=120, n_exponents_list=[4, 5, 6, 8, 10], plot_windows=True, save_plots=False, max_windows=4, start_index=400, end_index=1200)
+
+```
+
 ## Overview
 
 The `ElectricitySignalAnalyzer` class provides methods to load electricity signal data from CSV files and perform signal approximation using exponential functions. It implements the algorithms from the existing notebooks in the `Organized_code_and_tests` folder.

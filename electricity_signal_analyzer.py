@@ -5,6 +5,15 @@ from numpy import linalg as LA
 from sklearn.utils.extmath import randomized_svd
 import os
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+# log in console and file
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[
+    logging.FileHandler('electricity_signal_analyzer.log'),
+    logging.StreamHandler()
+])
+
 
 
 class ElectricitySignalAnalyzer:
@@ -12,10 +21,31 @@ class ElectricitySignalAnalyzer:
     A class for analyzing electricity signals using exponential approximation methods.
     """
     
-    def __init__(self):
+    def __init__(
+        self,
+        folder=None,
+        filename="128sample_Event.csv",
+        column_to_use="Report_1_IB",
+    ):
         self.data = None
-        self.column_to_use = "Report_1_IB"
-        self.default_file = "/Users/sebapersonal/Documents/github/NUMERICOUS/testing/data/128sample_Event.csv"
+        self.column_to_use = column_to_use
+        self.default_file = None
+        if folder and filename:
+            self.default_file = os.path.join(folder, filename)
+        else:
+            if not (folder and os.path.exists(folder) and os.path.isdir(folder)):
+                folder = os.getcwd()
+            csv_files = [f for f in os.listdir(folder) if f.endswith('.csv')]
+            if csv_files:
+                if filename and os.path.exists(os.path.join(folder, filename)):
+                    self.default_file = os.path.join(folder, filename)
+                else:
+                    self.default_file = os.path.join(folder, csv_files[0])
+        
+        # Data storage for window analysis results
+        self.cached_results = {}  # Dictionary to store results by window key
+        if self.default_file:
+            self.load_file()
     
     def load_file(self, file_path=None):
         """
@@ -29,12 +59,12 @@ class ElectricitySignalAnalyzer:
         
         try:
             self.data = pd.read_csv(file_path)
-            print("Successfully loaded file: {}".format(file_path))
-            print("Data shape: {}".format(self.data.shape))
-            print("Columns: {}".format(list(self.data.columns)))
+            logger.info("Successfully loaded file: {}".format(file_path))
+            logger.info("Data shape: {}".format(self.data.shape))
+            logger.info("Columns: {}".format(list(self.data.columns)))
             return self.data
         except Exception as e:
-            print("Error loading file {}: {}".format(file_path, e))
+            logger.error("Error loading file {}: {}".format(file_path, e))
             return None
     
     def choose_column_to_use(self, column_name="Report_1_IB"):
@@ -44,31 +74,31 @@ class ElectricitySignalAnalyzer:
         :param column_name: Name of the column to use for analysis
         """
         if self.data is None:
-            print("No data loaded. Please load a file first.")
+            logger.error("No data loaded. Please load a file first.")
             return
         
         if column_name not in self.data.columns:
-            print("Column '{}' not found in data. Available columns: {}".format(
+            logger.error("Column '{}' not found in data. Available columns: {}".format(
                 column_name, list(self.data.columns)))
             return
         
         self.column_to_use = column_name
-        print("Selected column: {}".format(self.column_to_use))
+        logger.info("Selected column: {}".format(self.column_to_use))
     
     def plot_entire_signal(self):
         """
         Plot the entire signal using the chosen column as y-axis and Microseconds as x-axis.
         """
         if self.data is None:
-            print("No data loaded. Please load a file first.")
+            logger.error("No data loaded. Please load a file first.")
             return
         
         if self.column_to_use not in self.data.columns:
-            print("Column '{}' not found in data.".format(self.column_to_use))
+            logger.error("Column '{}' not found in data.".format(self.column_to_use))
             return
         
         if 'Microseconds' not in self.data.columns:
-            print("Microseconds column not found in data.")
+            logger.error("Microseconds column not found in data.")
             return
         
         plt.figure(figsize=(12, 6))
@@ -85,7 +115,7 @@ class ElectricitySignalAnalyzer:
         """
         if input_data.size % 2 != 1:
             if verbose:
-                print('Hankel matrix requires odd length signal, last entry is removed')
+                logger.warning('Hankel matrix requires odd length signal, last entry is removed')
             input_data = input_data[0:-1]
 
         n = (input_data.size + 1) // 2
@@ -103,22 +133,22 @@ class ElectricitySignalAnalyzer:
         if randomized:
             if H.shape[0] > n_components and randomized:
                 if verbose:
-                    print("Hankel matrix: using randomized")
+                    logger.info("Hankel matrix: using randomized")
                 _, sig, Vt = randomized_svd(H, n_components, random_state=None)
             else:
                 if verbose:
-                    print('Hankel matrix: using svd')
+                    logger.info('Hankel matrix: using svd')
                 _, sig, Vt = LA.svd(H)
             V = Vt.T
         else:
             if np.any(np.iscomplex(H)):
                 if verbose:
-                    print('Complex Hankel matrix: using svd')
+                    logger.info('Complex Hankel matrix: using svd')
                 _, sig, Vt = LA.svd(H)
                 V = Vt.T
             else:
                 if verbose:
-                    print('Real Hankel matrix: using eigh')
+                    logger.info('Real Hankel matrix: using eigh')
                 eig, V = LA.eigh(H)
                 sig = np.abs(eig)
                 order = np.argsort(sig)[::-1]
@@ -128,11 +158,11 @@ class ElectricitySignalAnalyzer:
                 Vd = V[:,0:3]
                 diff = np.dot(H, Vd) - np.dot(Vd, eig_mat)
                 if verbose and LA.norm(diff)>10**(-10):
-                    print('Errors in SVD for dominant vectors: ', diff)
+                    logger.info('Errors in SVD for dominant vectors: ', diff)
         
         diff_norm = LA.norm((abs(np.dot(np.dot(V.T, H), V)) - np.diag(sig)))
         if verbose and diff_norm > 10.0**(-10):
-           print('WARNING. Error in SVD: ', diff_norm)
+           logger.warning('WARNING. Error in SVD: ', diff_norm)
         return sig, V
     
     def get_nodes(self, U, n_nodes):
@@ -191,18 +221,18 @@ class ElectricitySignalAnalyzer:
         :return: Dictionary with results
         """
         if self.data is None:
-            print("No data loaded. Please load a file first.")
+            logger.error("No data loaded. Please load a file first.")
             return None
         
         if self.column_to_use not in self.data.columns:
-            print("Column '{}' not found in data.".format(self.column_to_use))
+            logger.error("Column '{}' not found in data.".format(self.column_to_use))
             return None
         
         # Extract window data
         window_signal = self.data[self.column_to_use].iloc[start_index:end_index].values
         
         if len(window_signal) < 3:
-            print("Window too small: {} samples".format(len(window_signal)))
+            logger.error("Window too small: {} samples".format(len(window_signal)))
             return None
         
         try:
@@ -210,36 +240,56 @@ class ElectricitySignalAnalyzer:
                 window_signal, n_exponents, verbose=False
             )
             
+            # Normalize L2 error by window size as specified
+            window_size = end_index - start_index
+            normalized_error_l2 = error_norma_2 / window_size
+            
+            # Limit singular values to maximum 30 as specified
+            sig_limited = sig[:30] if len(sig) > 30 else sig
+            
             results = {
                 'nodes': nodes,
                 'coeffs': coeffs,
                 'approximation': app,
-                'sig': sig,
+                'sig': sig_limited,
                 'error_norma_2': error_norma_2,
                 'error_norma_inf': error_norma_inf,
                 'window_signal': window_signal,
                 'start_index': start_index,
                 'end_index': end_index,
-                'n_exponents': n_exponents
+                'n_exponents': n_exponents,
+                'normalized_error_l2': normalized_error_l2
             }
             
+            # Store results in cache with window key
+            window_key = (start_index, end_index, n_exponents)
+            cached_data = {
+                'singular_values': sig_limited,
+                'nodes': nodes,
+                'coeffs': coeffs,
+                'error_l2': normalized_error_l2,
+                'error_infinity': error_norma_inf,
+                'approximation': app
+            }
+            self.cached_results[window_key] = cached_data
+            
             if verbose:
-                print("\n=== Window [{}:{}] with {} exponents ===".format(
+                logger.info("\n=== Window [{}:{}] with {} exponents ===".format(
                     start_index, end_index, n_exponents))
-                print("Nodes: {}".format(nodes))
-                print("Coefficients: {}".format(coeffs))
-                print("Singular values: {}".format(sig))
-                print("L2 Error: {}".format(error_norma_2))
-                print("Inf Error (max): {}".format(np.max(np.abs(error_norma_inf))))
+                logger.info("Nodes: {}".format(nodes))
+                logger.info("Coefficients: {}".format(coeffs))
+                logger.info("Singular values: {}".format(sig))
+                logger.info("L2 Error: {}".format(error_norma_2))
+                logger.info("Inf Error (max): {}".format(np.max(np.abs(error_norma_inf))))
             
             return results
             
         except Exception as e:
-            print("Error in simulation for window [{}:{}]: {}".format(
+            logger.exception("Error in simulation for window [{}:{}]: {}".format(
                 start_index, end_index, e))
             return None
     
-    def iterate_through_windows(self, window_size=30, step_size=10, n_exponents_list=[2, 4, 6], plot_windows=True, save_plots=False, max_windows=None):
+    def iterate_through_windows(self, window_size=30, step_size=10, n_exponents_list=[2, 4, 6], plot_windows=True, save_plots=False, max_windows=None, start_index=None, end_index=None):
         """
         Iterate through overlapping windows of data and run simulations.
         
@@ -249,20 +299,43 @@ class ElectricitySignalAnalyzer:
         :param plot_windows: Whether to plot each window
         :param save_plots: Whether to save plots to a timestamped folder
         :param max_windows: Maximum number of windows to process
+        :param start_index: Starting index for data analysis (if None, uses 0)
+        :param end_index: Ending index for data analysis (if None, uses full data length)
         """
         if self.data is None:
-            print("No data loaded. Please load a file first.")
+            logger.error("No data loaded. Please load a file first.")
             return
         
         if self.column_to_use not in self.data.columns:
-            print("Column '{}' not found in data.".format(self.column_to_use))
+            logger.error("Column '{}' not found in data.".format(self.column_to_use))
             return
         
-        signal_data = self.data[self.column_to_use].values
-        microseconds_data = self.data['Microseconds'].values
+        # Get full data arrays
+        full_signal_data = self.data[self.column_to_use].values
+        full_microseconds_data = self.data['Microseconds'].values
         
-        total_samples = len(signal_data)
-        num_windows = (total_samples - window_size) // step_size + 1
+        # Apply index range if specified
+        if start_index is None:
+            start_index = 0
+        if end_index is None:
+            end_index = len(full_signal_data)
+        
+        # Validate index range
+        if start_index < 0:
+            start_index = 0
+        if end_index > len(full_signal_data):
+            end_index = len(full_signal_data)
+        if start_index >= end_index:
+            logger.error("Invalid index range: start_index ({}) must be less than end_index ({})".format(start_index, end_index))
+            return
+        
+        # Slice data to specified range
+        signal_data = full_signal_data[start_index:end_index]
+        microseconds_data = full_microseconds_data[start_index:end_index]
+        
+        # Calculate windows within the specified range
+        range_samples = len(signal_data)
+        num_windows = (range_samples - window_size) // step_size + 1
         if max_windows:
             num_windows = min(num_windows, max_windows)
         
@@ -272,28 +345,35 @@ class ElectricitySignalAnalyzer:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_folder = "simulation_outputs/electricity_analysis_{}".format(timestamp)
             os.makedirs(output_folder, exist_ok=True)
-            print("Created output folder: {}".format(output_folder))
+            logger.info("Created output folder: {}".format(output_folder))
         
-        print("Processing {} windows of size {} with step size {}".format(num_windows, window_size, step_size))
-        print("Testing n_exponents: {}".format(n_exponents_list))
+        logger.info("Processing {} windows of size {} with step size {} in range [{}:{}]".format(
+            num_windows, window_size, step_size, start_index, end_index))
+        logger.info("Testing n_exponents: {}".format(n_exponents_list))
         
         all_results = []
         
         for window_idx in range(num_windows):
-            start_idx = window_idx * step_size
-            end_idx = min(start_idx + window_size, total_samples)
+            # Calculate window indices within the sliced data range
+            relative_start_idx = window_idx * step_size
+            relative_end_idx = min(relative_start_idx + window_size, range_samples)
             
-            if end_idx - start_idx < 10:  # Skip very small windows
+            # Map back to original data indices for caching and display
+            absolute_start_idx = start_index + relative_start_idx
+            absolute_end_idx = start_index + relative_end_idx
+            
+            if relative_end_idx - relative_start_idx < 10:  # Skip very small windows
                 continue
             
-            print("\n{}".format("="*60))
-            print("WINDOW {}: Samples [{}:{}]".format(window_idx + 1, start_idx, end_idx))
-            print("{}".format("="*60))
+            logger.info("\n{}".format("="*60))
+            logger.info("WINDOW {}: Samples [{}:{}] (absolute indices)".format(
+                window_idx + 1, absolute_start_idx, absolute_end_idx))
+            logger.info("{}".format("="*60))
             
             window_results = {}
             
             for n_exp in n_exponents_list:
-                result = self.run_simulation_in_window(start_idx, end_idx, n_exp, verbose=True)
+                result = self.run_simulation_in_window(absolute_start_idx, absolute_end_idx, n_exp, verbose=True)
                 if result is not None:
                     window_results[n_exp] = result
             
@@ -301,10 +381,57 @@ class ElectricitySignalAnalyzer:
             
             # Plot the window if requested
             if plot_windows and window_results:
-                self._plot_window_results(window_results, microseconds_data, start_idx, end_idx, 
+                # Use full microseconds data for plotting context
+                self._plot_window_results(window_results, full_microseconds_data, absolute_start_idx, absolute_end_idx, 
                                         output_folder, window_idx + 1)
         
         return all_results
+    
+    def get_cached_window_data(self, start_index, end_index, n_exponents):
+        """
+        Retrieve cached analysis data for a specific window.
+        
+        :param start_index: Starting index of the window
+        :param end_index: Ending index of the window
+        :param n_exponents: Number of exponential terms used
+        :return: Dictionary with cached data or None if not found
+        """
+        window_key = (start_index, end_index, n_exponents)
+        return self.cached_results.get(window_key, None)
+    
+    def get_all_cached_windows(self):
+        """
+        Get all cached window analysis results.
+        
+        :return: Dictionary with all cached results, keyed by (start_index, end_index, n_exponents)
+        """
+        return self.cached_results.copy()
+    
+    def clear_cached_data(self):
+        """
+        Clear all cached window analysis data.
+        """
+        self.cached_results.clear()
+        logger.info("Cleared all cached window data")
+    
+    def get_cached_windows_summary(self):
+        """
+        Get a summary of all cached windows.
+        
+        :return: List of tuples with window information
+        """
+        summary = []
+        for (start_idx, end_idx, n_exp), data in self.cached_results.items():
+            summary.append({
+                'window': (start_idx, end_idx),
+                'n_exponents': n_exp,
+                'window_size': end_idx - start_idx,
+                'error_l2_normalized': data['error_l2'],
+                'num_singular_values': len(data['singular_values']),
+                'num_nodes': len(data['nodes']),
+                'num_coeffs': len(data['coeffs'])
+            })
+        return summary
     
     def _plot_window_results(self, window_results, microseconds_data, start_idx, end_idx, output_folder=None, window_number=None):
         """
@@ -383,6 +510,6 @@ class ElectricitySignalAnalyzer:
                 window_number, start_idx, end_idx)
             filepath = os.path.join(output_folder, filename)
             plt.savefig(filepath, dpi=300, bbox_inches='tight')
-            print("Saved plot: {}".format(filepath))
+            logger.info("Saved plot: {}".format(filepath))
         
         plt.show()

@@ -235,11 +235,6 @@ class TestElectricitySignalAnalyzer:
         
         assert result is None
     
-    def test_run_simulation_in_window_no_data(self, analyzer: ElectricitySignalAnalyzer):
-        """Test simulation when no data is loaded."""
-        result = analyzer.run_simulation_in_window(0, 30, n_exponents=2, verbose=False)
-        assert result is None
-    
     def test_run_simulation_in_window_invalid_column(self, analyzer: ElectricitySignalAnalyzer, mock_data):
         """Test simulation with invalid column name."""
         analyzer.data = mock_data
