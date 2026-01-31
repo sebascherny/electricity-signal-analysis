@@ -64,7 +64,7 @@ class ElectricitySignalAnalyzer:
             logger.info("Columns: {}".format(list(self.data.columns)))
             return self.data
         except Exception as e:
-            logger.error("Error loading file {}: {}".format(file_path, e))
+            logger.exception("Error loading file {}: {}".format(file_path, e))
             return None
     
     def choose_column_to_use(self, column_name="Report_1_IB"):

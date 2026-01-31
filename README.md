@@ -73,7 +73,7 @@ The `ElectricitySignalAnalyzer` class provides methods to load electricity signa
    - Prints detailed results including nodes, coefficients, and errors
    - Returns dictionary with all results
 
-6. **`iterate_through_windows(window_size=30, n_exponents_list=[2, 4, 6], plot_windows=True)`**
+6. **`iterate_through_windows(window_size=30, n_exponents_list=[2, 4, 6], plot_windows=True, save_plots=False, max_windows=None, start_index=None, end_index=None)`**
    - Processes multiple windows of specified size
    - Tests different numbers of exponential terms
    - Generates plots for each window and parameter combination
@@ -118,8 +118,8 @@ results = analyzer.iterate_through_windows(
 The class expects CSV files with the following columns:
 - `Timestamp`: Time stamps
 - `Microseconds`: Time in microseconds (used as x-axis)
-- `Report_1_IA`, `Report_1_IB`, `Report_1_IC`: Current measurements
-- `Report_1_VA_kV`, `Report_1_VB_kV`, `Report_1_VC_kV`: Voltage measurements
+- `Report_1_IB` or column name you want to analyze: Current measurements
+
 
 ## Dependencies
 
