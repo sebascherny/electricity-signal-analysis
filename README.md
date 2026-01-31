@@ -15,6 +15,30 @@ python example_usage.py
 python test_caching_example.py
 ```
 
+## Web Interface
+
+The easiest way to use the analyzer is through the web interface:
+
+```bash
+source .venv/bin/activate
+python3 start_server.py
+```
+
+Then open your browser to `http://localhost:8000` and:
+
+1. **Upload your CSV file** with electricity signal data
+2. **Configure parameters** like window size, step size, number of exponents
+3. **Set optional ranges** with start/end indices to analyze specific portions
+4. **Click "Analyze Signal"** to process your data
+5. **Download results** as a ZIP file containing plots and analysis logs
+
+The web interface provides:
+- ✅ **File validation** and column detection
+- ✅ **Parameter validation** with helpful hints
+- ✅ **Progress indication** during analysis
+- ✅ **Automatic ZIP download** with all results
+- ✅ **Detailed logs** and analysis summary
+
 ## Test in python console
 
 In bash (assuming you created a virtual environment as said above):

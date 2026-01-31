@@ -14,6 +14,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
     logging.StreamHandler()
 ])
 
+plt.ioff()
+
 
 
 class ElectricitySignalAnalyzer:
@@ -107,7 +109,7 @@ class ElectricitySignalAnalyzer:
         plt.ylabel(self.column_to_use)
         plt.title('Entire Signal: {} vs Microseconds'.format(self.column_to_use))
         plt.grid(True, alpha=0.3)
-        plt.show()
+        plt.show(block=False)
     
     def construct_hankel(self, input_data, verbose=False):
         """
@@ -512,4 +514,4 @@ class ElectricitySignalAnalyzer:
             plt.savefig(filepath, dpi=300, bbox_inches='tight')
             logger.info("Saved plot: {}".format(filepath))
         
-        plt.show()
+        plt.show(block=False)
