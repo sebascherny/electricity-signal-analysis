@@ -14,8 +14,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
     logging.StreamHandler()
 ])
 
-plt.ioff()
-
 
 
 class ElectricitySignalAnalyzer:
@@ -28,6 +26,8 @@ class ElectricitySignalAnalyzer:
         folder=None,
         filename="128sample_Event.csv",
         column_to_use="Report_1_IB",
+        plot_windows=False,
+        plots_must_block=False,
     ):
         self.data = None
         self.column_to_use = column_to_use
@@ -48,6 +48,9 @@ class ElectricitySignalAnalyzer:
         self.cached_results = {}  # Dictionary to store results by window key
         if self.default_file:
             self.load_file()
+        if not plot_windows:
+            plt.ioff()
+        self.plots_must_block = plots_must_block
     
     def load_file(self, file_path=None):
         """
@@ -109,7 +112,7 @@ class ElectricitySignalAnalyzer:
         plt.ylabel(self.column_to_use)
         plt.title('Entire Signal: {} vs Microseconds'.format(self.column_to_use))
         plt.grid(True, alpha=0.3)
-        plt.show(block=False)
+        plt.show(block=self.plots_must_block)
     
     def construct_hankel(self, input_data, verbose=False):
         """
@@ -207,12 +210,76 @@ class ElectricitySignalAnalyzer:
         difference_without_small_values = np.array([
             D if np.abs(D) >= 1 else 1 for D in difference
         ])
-        error_norma_inf = difference / difference_without_small_values
+        error_norma_inf = np.sum(np.abs(difference / difference_without_small_values))
         error_norma_2 = np.linalg.norm(difference)
         
         return nodes, coeffs, app, sig, error_norma_2, error_norma_inf
     
-    def run_simulation_in_window(self, start_index, end_index, n_exponents=2, verbose=True):
+    def get_error_from_result(self, result):
+        return result['new_normalized_error']
+
+    def _run_simulation_one_window_one_exponent(self, start_index, end_index, window_signal, n_exponents, verbose=True):
+        try:
+            nodes, coeffs, app, sig, error_norma_2, error_norma_inf = self.approximate_sequence(
+                window_signal, n_exponents, verbose=False
+            )
+            
+            # Normalize L2 error by window size as specified
+            window_size = end_index - start_index
+            normalized_error_l2 = error_norma_2 / window_size
+
+            # sum of absolute values of differences between app and sig:
+            sum_absolute_differences = np.sum(np.abs(app - window_signal))
+            new_normalized_error = sum_absolute_differences / np.max(np.abs(window_signal))
+            
+            # Limit singular values to maximum 30 as specified
+            sig_limited = sig[:30] if len(sig) > 30 else sig
+            
+            results = {
+                'nodes': nodes,
+                'coeffs': coeffs,
+                'approximation': app,
+                'sig': sig_limited,
+                'error_norma_2': error_norma_2,
+                'error_norma_inf': error_norma_inf,
+                'window_signal': window_signal,
+                'start_index': start_index,
+                'end_index': end_index,
+                'n_exponents': n_exponents,
+                'normalized_error_l2': normalized_error_l2,
+                'new_normalized_error': new_normalized_error
+            }
+            
+            # Store results in cache with window key
+            window_key = (start_index, end_index, n_exponents)
+            cached_data = {
+                'singular_values': sig_limited,
+                'nodes': nodes,
+                'coeffs': coeffs,
+                'error_l2': normalized_error_l2,
+                'error_infinity': error_norma_inf,
+                'approximation': app
+            }
+            self.cached_results[window_key] = cached_data
+            
+            if verbose:
+                logger.info("\n=== Window [{}:{}] with {} exponents ===".format(
+                    start_index, end_index, n_exponents))
+                logger.info("Nodes: {}".format(nodes))
+                logger.info("Coefficients: {}".format(coeffs))
+                logger.info("Singular values: {}".format(sig))
+                logger.info("L2 Error: {}".format(error_norma_2))
+                logger.info("Inf Error (max): {}".format(np.max(np.abs(error_norma_inf))))
+                logger.info("New Normalized Error: {}".format(new_normalized_error))
+            
+            return results
+            
+        except Exception as e:
+            logger.exception("Error in simulation for window [{}:{}]: {}".format(
+                start_index, end_index, e))
+            return None
+
+    def run_simulation_in_window(self, start_index, end_index, n_exponents_list=[2, 4, 6, 8, 10], verbose=True):
         """
         Run approximation simulation on a window of data.
         
@@ -237,59 +304,13 @@ class ElectricitySignalAnalyzer:
             logger.error("Window too small: {} samples".format(len(window_signal)))
             return None
         
-        try:
-            nodes, coeffs, app, sig, error_norma_2, error_norma_inf = self.approximate_sequence(
-                window_signal, n_exponents, verbose=False
-            )
-            
-            # Normalize L2 error by window size as specified
-            window_size = end_index - start_index
-            normalized_error_l2 = error_norma_2 / window_size
-            
-            # Limit singular values to maximum 30 as specified
-            sig_limited = sig[:30] if len(sig) > 30 else sig
-            
-            results = {
-                'nodes': nodes,
-                'coeffs': coeffs,
-                'approximation': app,
-                'sig': sig_limited,
-                'error_norma_2': error_norma_2,
-                'error_norma_inf': error_norma_inf,
-                'window_signal': window_signal,
-                'start_index': start_index,
-                'end_index': end_index,
-                'n_exponents': n_exponents,
-                'normalized_error_l2': normalized_error_l2
-            }
-            
-            # Store results in cache with window key
-            window_key = (start_index, end_index, n_exponents)
-            cached_data = {
-                'singular_values': sig_limited,
-                'nodes': nodes,
-                'coeffs': coeffs,
-                'error_l2': normalized_error_l2,
-                'error_infinity': error_norma_inf,
-                'approximation': app
-            }
-            self.cached_results[window_key] = cached_data
-            
-            if verbose:
-                logger.info("\n=== Window [{}:{}] with {} exponents ===".format(
-                    start_index, end_index, n_exponents))
-                logger.info("Nodes: {}".format(nodes))
-                logger.info("Coefficients: {}".format(coeffs))
-                logger.info("Singular values: {}".format(sig))
-                logger.info("L2 Error: {}".format(error_norma_2))
-                logger.info("Inf Error (max): {}".format(np.max(np.abs(error_norma_inf))))
-            
-            return results
-            
-        except Exception as e:
-            logger.exception("Error in simulation for window [{}:{}]: {}".format(
-                start_index, end_index, e))
-            return None
+        results = {}
+        for n_exponents in n_exponents_list:
+            result_n = self._run_simulation_one_window_one_exponent(start_index, end_index, window_signal, n_exponents, verbose=verbose)
+            if result_n:
+                results[n_exponents] = result_n
+        
+        return results
     
     def iterate_through_windows(self, window_size=30, step_size=10, n_exponents_list=[2, 4, 6], plot_windows=True, save_plots=False, max_windows=None, start_index=None, end_index=None):
         """
@@ -372,12 +393,7 @@ class ElectricitySignalAnalyzer:
                 window_idx + 1, absolute_start_idx, absolute_end_idx))
             logger.info("{}".format("="*60))
             
-            window_results = {}
-            
-            for n_exp in n_exponents_list:
-                result = self.run_simulation_in_window(absolute_start_idx, absolute_end_idx, n_exp, verbose=True)
-                if result is not None:
-                    window_results[n_exp] = result
+            window_results = self.run_simulation_in_window(absolute_start_idx, absolute_end_idx, n_exponents_list, verbose=True)
             
             all_results.append(window_results)
             
@@ -472,13 +488,13 @@ class ElectricitySignalAnalyzer:
         for idx, (n_exp, result) in enumerate(window_results.items()):
             color = colors[idx % len(colors)]
             ax_window.plot(window_microseconds, result['approximation'], color=color, linestyle='-',
-                          label='{} exp (L2: {:.4f})'.format(n_exp, result["error_norma_2"]), linewidth=2)
-            error_info.append('{}exp: {:.6f}'.format(n_exp, result["error_norma_2"]))
+                          label='{} exp (L2: {:.4f})'.format(n_exp, self.get_error_from_result(result)), linewidth=2)
+            error_info.append('{}exp: {:.6f}'.format(n_exp, self.get_error_from_result(result)))
         
         ax_window.set_xlabel('Microseconds')
         ax_window.set_ylabel(self.column_to_use)
-        ax_window.set_title('Window [{}:{}] - All Approximations\nL2 Errors: {}'.format(
-            start_idx, end_idx, ', '.join(error_info)))
+        ax_window.set_title('Window [{}:{}] - All Approximations\nBest one: {} exponents'.format(
+            start_idx, end_idx, min(window_results.items(), key=lambda x: self.get_error_from_result(x[1]))[0]))
         ax_window.legend()
         ax_window.grid(True, alpha=0.3)
         
@@ -514,4 +530,4 @@ class ElectricitySignalAnalyzer:
             plt.savefig(filepath, dpi=300, bbox_inches='tight')
             logger.info("Saved plot: {}".format(filepath))
         
-        plt.show(block=False)
+        plt.show(block=self.plots_must_block)
